@@ -141,6 +141,10 @@ ehthumbs.db
 Thumbs.db
 
 # Specific to your project structure
+ultralytics/nn/modules/module.py
+ultralytics/nn/modules/module_v2.p
+ultralytics/models/v8/
+pictures/
 runs/                   # YOLO and other ML frameworks often save outputs here
 ultralytics.egg-info/   # Already covered by *.egg-info/ but good to be explicit if seen
 
