@@ -1,0 +1,27 @@
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+#path: /data/jiayuan/BDDcoco/yolo_v8_toy  # dataset root dir
+path: D:/navigationData/ImagesForYOLOv8Mutil_3  # dataset root dir
+
+# Train/val/test image paths for all tasks
+train: images/train  # train images for object detection (relative to 'path')
+
+
+val: images/val  # val images for object detection (relative to 'path')
+
+
+test: images/test  # test images for object detection (relative to 'path')
+
+labels_list:
+  - detection-object
+  - seg-line
+
+tnc: 2  # number of classes
+nc_list: [1,1]
+map: [{'1':'0'}, {'0':'0'}]
+#map: [None,{'10':'0'},{'11':'0'}]
+
+# Classes for all tasks
+names:
+  0: line
+  1: stem
+
