@@ -141,6 +141,7 @@ ehthumbs.db
 Thumbs.db
 
 # Specific to your project structure
+examples/
 ultralytics/nn/modules/module.py
 ultralytics/nn/modules/module_v2.p
 ultralytics/models/v8/
