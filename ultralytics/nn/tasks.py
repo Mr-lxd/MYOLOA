@@ -11,12 +11,7 @@ from ultralytics.nn.modules import (AIFI, C1, C2, C3, C3TR, SPP, SPPF, Bottlenec
                                     Classify, Concat, Conv, ConvTranspose, Detect, DWConv, DWConvTranspose2d, Focus,
                                     GhostBottleneck, GhostConv, HGBlock, HGStem, Pose, RepC3, RepConv, RTDETRDecoder,
                                     Segment, Concat_dropout)
-from ultralytics.nn.modules.module import (DySample, CARAFE, SPDConv, CSPOmniKernel, DICSPOmniKernel, DICSPOmniKernelv2,
-                                           DICSPOmniKernelv3, DICSPOmniKernelv4, Detect_LSCSBD, Detect_v2, C2f_MambaOut,
-                                           Segment_v2, Segment_v3, Segment_v4, Segment_v5, Segment_v6, Detect_SEAM, DICSPv2_Residual,
-                                           DICSPv2_Residual_v2, DICSPv2_Residual_add_v2
-                                           )
-from ultralytics.nn.modules.module_v2 import (CSMHSA, SDI, DGCST, DGCST_v2, DGCST_v3, DGCST_v4, Concat_SPD)
+from ultralytics.nn.modules.module_ours import (SPDC, TriPAC, DGST, Segment_v3)
 from ultralytics.yolo.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
 from ultralytics.yolo.utils.checks import check_requirements, check_suffix, check_yaml
 from ultralytics.yolo.utils.plotting import feature_visualization
@@ -236,7 +231,7 @@ class MultiBaseModel(nn.Module):
 
             #####LXD adding custom detection heads#1
             if isinstance(m, (
-            Detect, Detect_LSCSBD, Segment, Segment_v2, Segment_v3, Segment_v4, Segment_v5, Segment_v6, Detect_SEAM, Detect_v2)):  # if it's a task head
+            Detect, Segment, Segment_v3)):  # if it's a task head
                 outputs.append(x)
             # y.append(x)
             y.append(x if m.i in self.save else None)  # save output
@@ -350,7 +345,7 @@ class MultiBaseModel(nn.Module):
         self = super()._apply(fn)
         for m in self.model[-3:]:  # Iterate over the last three layers
             #####LXD adding custom detection heads#2
-            if isinstance(m, (Detect, Detect_LSCSBD, Segment, Segment_v2, Segment_v3, Segment_v4, Segment_v5, Segment_v6, Detect_SEAM, Detect_v2)):
+            if isinstance(m, (Detect, Segment, Segment_v3)):
                 m.stride = fn(m.stride)
                 m.anchors = fn(m.anchors)
                 m.strides = fn(m.strides)
@@ -469,7 +464,7 @@ class MultiModel(MultiBaseModel):
         for m in self.model:
             # m = self.model[-1]  # Detect()
             #####LXD adding custom detection heads#3
-            if isinstance(m, (Detect, Detect_LSCSBD, Segment, Pose, Segment_v2, Segment_v3, Segment_v4, Segment_v5, Segment_v6, Detect_SEAM, Detect_v2)):
+            if isinstance(m, (Detect, Segment, Pose, Segment_v3)):
                 s = 256  # 2x min stride
                 m.inplace = self.inplace
 
@@ -833,7 +828,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
         if m in (Classify, Conv, ConvTranspose, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, Focus,
                  BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, nn.ConvTranspose2d, DWConvTranspose2d, C3x, RepC3,
-                 SPDConv, C2f_MambaOut, DGCST, DGCST_v2, DGCST_v3, DGCST_v4):
+                 SPDC, DGST):
             c1, c2 = ch[f], args[0]
             if c2 != nc:  # if c2 not equal to number of classes (i.e. for Classify() output)
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
@@ -851,36 +846,9 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 args.insert(4, n)  # number of repeats
                 n = 1
         #####LXD
-        # NOTE: When adding custom detection heads (like Detect_LSCD), make sure to update corresponding handling
-        # in MultiModel and MultiBaseModel calss methods (__init__, _forward_once, _apply, etc.) to ensure proper integration
-        elif m in [DySample, CARAFE]:
-            args = [ch[f], *args[0:]]
-        elif m in {DICSPv2_Residual_v2, DICSPv2_Residual_add_v2}:
+        elif m in {TriPAC}:
             c2 = ch[f]
             args = [c2, *args[1:]]
-        elif m in {CSPOmniKernel, DICSPOmniKernel, DICSPOmniKernelv4, DICSPOmniKernelv3, DICSPOmniKernelv2,
-                   DICSPv2_Residual}:
-            c2 = ch[f]
-            args = [c2]
-        elif m in {Detect_LSCSBD}:
-            nc = args[0]
-            input_channels = [ch[x] for x in f]
-            hidc = make_divisible(min(max(input_channels), max_channels) * width, 8)
-            args[:] = [nc, hidc, input_channels]
-        elif m in {CSMHSA}:
-            c1 = [ch[x] for x in f]
-            c2 = ch[f[-1]]
-            args = [c1, c2]
-        elif m is SDI:
-            args = [[ch[x] for x in f]]
-        elif m is Concat_SPD:
-            # 实例化模块
-            # Concat_SPD(inc_of_spd_target, ouc_of_spd_target, dimension)
-            module = m(ch[f[1]], args[0], args[1])
-
-            # 计算总输出通道数 c2
-            # c2 = channels(f[0]) + ouc_spd_f1 (来自处理后的f[1]) + channels(f[2]) + ...
-            c2 = ch[f[0]] + args[0] + sum(ch[x] for x in f[2:])
         #####
         elif m is nn.BatchNorm2d:
             args = [ch[f]]
@@ -889,7 +857,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         elif m is Concat_dropout:
             c2 = ch[-1]
             ch_list = [ch[x] for x in f]
-        elif m in (Detect, Segment, Pose, RTDETRDecoder, Segment_v2, Segment_v3, Segment_v4, Segment_v5, Segment_v6, Detect_SEAM, Detect_v2):
+        elif m in (Detect, Segment, Pose, RTDETRDecoder, Segment_v3):
             args.append([ch[x] for x in f])
             if m is Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
